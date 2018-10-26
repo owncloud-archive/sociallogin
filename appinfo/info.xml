@@ -1,6 +1,5 @@
 <?xml version="1.0"?>
-<info xmlns:xsi= "http://www.w3.org/2001/XMLSchema-instance"
-      xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
+<info xmlns:xsi= "http://www.w3.org/2001/XMLSchema-instance">
     <id>sociallogin</id>
     <name>Social Login</name>
     <summary>Social login via OAuth or OpenID</summary>
@@ -11,20 +10,15 @@
     <namespace>SocialLogin</namespace>
     <category>integration</category>
     <category>social</category>
-    <website>https://github.com/zorn-v/nextcloud-social-login</website>
-    <bugs>https://github.com/zorn-v/nextcloud-social-login/issues</bugs>
-    <repository>https://github.com/zorn-v/nextcloud-social-login</repository>
-    <screenshot>https://raw.githubusercontent.com/zorn-v/nextcloud-social-login/master/appinfo/screenshot.png</screenshot>
+    <website>https://github.com/owncloud/sociallogin</website>
+    <bugs>https://github.com/owncloud/sociallogin/issues</bugs>
+    <repository>https://github.com/owncloud/sociallogin</repository>
+    <screenshot>https://raw.githubusercontent.com/owncloud/sociallogin/master/appinfo/screenshot.png</screenshot>
     <dependencies>
-        <nextcloud min-version="12" max-version="14" />
+        <owncloud min-version="10.0" max-version="11.0.0.0" />
     </dependencies>
     <settings>
-    		<admin>OCA\SocialLogin\Settings\AdminSettings</admin>
-        <admin-section>OCA\SocialLogin\Settings\AdminSection</admin-section>
+        <admin>OCA\SocialLogin\Settings\AdminSettings</admin>
+        <personal>OCA\SocialLogin\Settings\PersonalSettings</personal>
   	</settings>
-    <repair-steps>
-        <post-migration>
-            <step>OCA\SocialLogin\Migration\SeparateProvidersNameAndTitle</step>
-        </post-migration>
-    </repair-steps>
 </info>

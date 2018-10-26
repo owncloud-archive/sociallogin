@@ -66,6 +66,11 @@ $providersData = [
                 'type' => 'text',
                 'required' => true,
             ],
+			'idScope' => [
+					'title' => 'Scope to be used to identify a user (e.g. LDAP uuid)',
+				'type' => 'text',
+				'required' => false
+			]
         ]
     ],
     'custom_oauth2' => [
@@ -125,8 +130,8 @@ $providersData = [
     ],
 ];
 ?>
-<div id="sociallogin" class="section">
-    <form id="sociallogin_settings" action="<?php print_unescaped($_['action_url']) ?>" method="post">
+    <form id="sociallogin_settings" class="section" action="<?php print_unescaped($_['action_url']) ?>" method="post">
+		<h2 class="app-name"><?php p($l->t('Social Login')); ?></h2>
 
         <p>
         <label for="new_user_group"><?php p($l->t('Default group that all new users belong')); ?></label>
@@ -222,5 +227,3 @@ $providersData = [
         <?php endforeach ?>
     </div>
 <?php endforeach ?>
-
-</div>

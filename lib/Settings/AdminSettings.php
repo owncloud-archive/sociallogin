@@ -7,6 +7,7 @@ use OCP\Settings\ISettings;
 use OCP\IGroupManager;
 use OCP\IURLGenerator;
 use OCP\IConfig;
+use OCP\Template;
 use OCP\Util;
 
 class AdminSettings implements ISettings
@@ -28,8 +29,13 @@ class AdminSettings implements ISettings
         $this->groupManager = $groupManager;
     }
 
-    public function getForm()
-    {
+	/**
+	 * The panel controller method that returns a template to the UI
+	 *
+	 * @since 10.0
+	 * @return TemplateResponse | Template
+	 */
+	public function getPanel() {
         Util::addStyle($this->appName, 'settings');
         Util::addScript($this->appName, 'settings');
         $paramsNames = [
@@ -75,27 +81,32 @@ class AdminSettings implements ISettings
             $custom_oauth2Providers = [];
         }
 
-        $params = [
-            'action_url' => $this->urlGenerator->linkToRoute($this->appName.'.settings.saveAdmin'),
-            'groups' => $groupNames,
-            'providers' => $providers,
-            'openid_providers' => $openIdProviders,
-            'custom_oidc_providers' => $custom_oidcProviders,
-            'custom_oauth2_providers' => $custom_oauth2Providers,
-        ];
+		$template = new Template($this->appName, 'admin');
+		$template->assign('action_url',  $this->urlGenerator->linkToRoute($this->appName.'.settings.saveAdmin'));
+            $template->assign('groups', $groupNames);
+            $template->assign('providers', $providers);
+            $template->assign('openid_providers', $openIdProviders);
+            $template->assign('custom_oidc_providers', $custom_oidcProviders);
+            $template->assign('custom_oauth2_providers', $custom_oauth2Providers);
         foreach ($paramsNames as $paramName) {
-            $params[$paramName] = $this->config->getAppValue($this->appName, $paramName);
+			$template->assign($paramName, $this->config->getAppValue($this->appName, $paramName));
         }
-        return new TemplateResponse($this->appName, 'admin', $params);
-    }
-
-    public function getSection()
-    {
-        return $this->appName;
+        return $template;
     }
 
     public function getPriority()
     {
         return 0;
     }
+
+
+	/**
+	 * A string to identify the section in the UI / HTML and URL
+	 *
+	 * @since 10.0
+	 * @return string
+	 */
+	public function getSectionID() {
+		return 'security';
+	}
 }

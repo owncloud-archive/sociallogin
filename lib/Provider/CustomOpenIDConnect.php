@@ -25,7 +25,7 @@ class CustomOpenIDConnect extends OAuth2
         return $collection;
     }
 
-    public function getUserProfile()
+    public function getUserProfile($idScope = null)
     {
         $userData = $this->getStoredData('user_data');
         $user = json_decode($userData);
@@ -53,6 +53,21 @@ class CustomOpenIDConnect extends OAuth2
                 $userProfile->email = $profile->get('email');
             }
         }
+
+        if ($idScope !== null) {
+			if($data->get($idScope) === null) {
+				$profile = new Data\Collection($this->apiRequest($userInfoUrl));
+				$id = $profile->get($idScope);
+				if ($id !== null) {
+					$data->set($idScope, $id);
+				} else {
+					throw new \Exception('Requested id scope is unknown!');
+				}
+			}
+			$userProfile->data = [
+				$idScope => $data->get($idScope)
+			];
+		}
 
         return $userProfile;
     }
