@@ -2,11 +2,14 @@
 
 namespace OCA\SocialLogin\Controller;
 
+use OC\Authentication\Token\IToken;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\RedirectResponse;
 use OCP\IL10N;
+use OCP\ILogger;
 use OCP\IRequest;
 use OCP\IConfig;
+use OCP\IUser;
 use OCP\IUserSession;
 use OCP\IUserManager;
 use OCP\IURLGenerator;
@@ -45,9 +48,10 @@ class LoginController extends Controller
     private $l;
     /** @var SocialConnectDAO */
     private $socialConnect;
+	/** @var ILogger */
+	private $logger;
 
-
-    public function __construct(
+	public function __construct(
         $appName,
         IRequest $request,
         IConfig $config,
@@ -59,7 +63,8 @@ class LoginController extends Controller
         IGroupManager $groupManager,
         ISession $session,
         IL10N $l,
-        SocialConnectDAO $socialConnect
+        SocialConnectDAO $socialConnect,
+		ILogger $logger
     ) {
         parent::__construct($appName, $request);
         $this->config = $config;
@@ -72,7 +77,8 @@ class LoginController extends Controller
         $this->session = $session;
         $this->l = $l;
         $this->socialConnect = $socialConnect;
-    }
+		$this->logger = $logger;
+	}
 
     /**
      * @PublicPage
@@ -164,7 +170,8 @@ class LoginController extends Controller
                             'user_info_url'    => $prov['userInfoUrl'],
                             'api_base_url'     => '',
                         ]),
-                    ];
+						'id.scope' => $prov['idScope'] ?? null
+					];
                     break;
                 }
             }
@@ -199,7 +206,7 @@ class LoginController extends Controller
                             'profile_url'      => $prov['profileUrl'],
                         ]),
                         'profile_fields'   => $prov['profileFields'],
-                    ];
+					];
                     break;
                 }
             }
@@ -218,11 +225,12 @@ class LoginController extends Controller
         try {
             $adapter = new $class($config, null, $this->storage);
             $adapter->authenticate();
-            $profile = $adapter->getUserProfile();
+            /** @var Profile $profile */
+            $profile = $adapter->getUserProfile($config['id.scope'] ?? null);
         }  catch (\Exception $e) {
             throw new LoginException($e->getMessage());
         }
-        $profileId = preg_replace('#.*/#', '', rtrim($profile->identifier, '/'));
+		$profileId = preg_replace('#.*/#', '', rtrim($profile->identifier, '/'));
         if (empty($profileId)) {
             throw new LoginException($this->l->t('Can not get identifier from provider'));
         }
@@ -230,12 +238,53 @@ class LoginController extends Controller
         if (strlen($uid) > 64) {
             $uid = $provider.'-'.md5($profileId);
         }
-        return $this->login($uid, $profile);
+        return $this->login($uid, $profile, $config['id.scope']);
     }
 
-    private function login($uid, Profile $profile)
+	/**
+	 * @param $samlNameId
+	 * @return array [string uid, UserInterface backend]
+	 */
+	private function determineBackendFor($samlNameId) {
+		foreach ($this->userManager->getBackends() as $backend) {
+			$class = get_class($backend);
+			$this->logger->debug(
+				"Searching Backend $class for $samlNameId", ['app' => __CLASS__]
+			);
+			$userIds = $backend->getUsers($samlNameId, 2);
+			switch (count($userIds)) {
+				case 0:
+					$this->logger->debug(
+						"Backend $class returned no matching user for $samlNameId",
+						['app' => __CLASS__]
+					);
+					break;
+				case 1:
+					$uid = array_pop($userIds);
+					$this->logger->debug(
+						"Backend $class returned $uid for $samlNameId",
+						['app' => __CLASS__]
+					);
+					// Found the user in a different backend
+					return [$uid, $backend];
+				default:
+					throw new \InvalidArgumentException("Backend $class returned more than one user for $samlNameId: " . implode(', ', $userIds));
+			}
+		}
+		return [];
+	}
+
+
+	private function login($uid, Profile $profile, $idScope = null)
     {
-        $user = $this->userManager->get($uid);
+    	if ($idScope !== null && isset($profile->data[$idScope])) {
+			$user = $this->determineBackendFor($profile->data[$idScope]);
+			if ($user === null) {
+				throw new \Exception("No user known for id scope {$profile->data[$idScope]}");
+			}
+			$uid = $user[0];
+		}
+		$user = $this->userManager->get($uid);
         if (null === $user) {
             $connectedUid = $this->socialConnect->findUID($uid);
             $user = $this->userManager->get($connectedUid);
@@ -285,7 +334,7 @@ class LoginController extends Controller
             $this->config->setUserValue($uid, $this->appName, 'disable_password_confirmation', 1);
         }
 
-        $this->userSession->completeLogin($user, ['loginName' => $user->getUID(), 'password' => null]);
+        $this->completeLogin($user, ['loginName' => $user->getUID(), 'password' => null]);
         $this->userSession->createSessionToken($this->request, $user->getUID(), $user->getUID());
 
         if ($redirectUrl = $this->session->get('login_redirect_url')) {
@@ -301,4 +350,39 @@ class LoginController extends Controller
         $userAgent = $this->request->getHeader('USER_AGENT');
         return $userAgent !== null ? $userAgent : 'unknown';
     }
+
+	/**
+	 * @param IUser $user
+	 * @param array $loginDetails
+	 * @param bool $regenerateSessionId
+	 * @return true returns true if login successful or an exception otherwise
+	 * @throws LoginException
+	 */
+	public function completeLogin(IUser $user, array $loginDetails, $regenerateSessionId = true) {
+		if (!$user->isEnabled()) {
+			// disabled users can not log in
+			// injecting l10n does not work - there is a circular dependency between session and \OCP\L10N\IFactory
+			$message = \OC::$server->getL10N('lib')->t('User disabled');
+			throw new LoginException($message);
+		}
+		if($regenerateSessionId) {
+			$this->session->regenerateId();
+		}
+		$this->userSession->setUser($user);
+//		$this->userSession->setLoginName($loginDetails['loginName']);
+		if(isset($loginDetails['token']) && $loginDetails['token'] instanceof IToken) {
+//			$this->userSession->setToken($loginDetails['token']->getId());
+			$firstTimeLogin = false;
+		} else {
+//			$this->userSession->setToken(null);
+			$firstTimeLogin = $user->updateLastLoginTimestamp();
+		}
+		$this->userManager->emit('\OC\User', 'postLogin', [$user, $loginDetails['password']]);
+		if($this->userSession->isLoggedIn()) {
+			$this->userSession->prepareUserLogin($firstTimeLogin, $regenerateSessionId);
+			return true;
+		}
+		$message = \OC::$server->getL10N('lib')->t('Login canceled by app');
+		throw new LoginException($message);
+	}
 }
