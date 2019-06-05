@@ -271,7 +271,7 @@ class LoginController extends Controller
 					throw new \InvalidArgumentException("Backend $class returned more than one user for $samlNameId: " . implode(', ', $userIds));
 			}
 		}
-		return [];
+		return null;
 	}
 
 
