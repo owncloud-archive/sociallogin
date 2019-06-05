@@ -298,7 +298,7 @@ class LoginController extends Controller
             }
             $currentUid = $this->userSession->getUser()->getUID();
             $this->socialConnect->connectLogin($currentUid, $uid);
-            return new RedirectResponse($this->urlGenerator->linkToRoute('settings.PersonalSettings.index', ['section'=>'additional']));
+            return new RedirectResponse($this->urlGenerator->linkToRoute('settings.SettingsPage.getPersonal', ['sectionid'=>'security']));
         }
         if (null === $user) {
             if ($this->config->getAppValue($this->appName, 'disable_registration')) {
